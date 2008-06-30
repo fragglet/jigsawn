@@ -64,7 +64,7 @@ typedef enum {
  *                          possible to initialise the new lexer.
  */
 
-JSONLexer *json_lexer_new(JSONInputSource *source,
+JSONLexer *json_lexer_new(JSONInputSource source,
                           JSONInputReadFunc read_func);
 
 /**

@@ -20,37 +20,14 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
 #include <stdlib.h>
+#include "input-reader.h"
 #include "lexer.h"
 
 struct _JSONLexer {
-
-        /**
-         * Input buffer. Data is read from the input stream into this 
-         * buffer in blocks, and read out a character at a time.  When
-         * the buffer is empty, it is refilled.
-         */
         
-        char input_buffer[256];
+        /** Input source reader */
 
-        /** Number of bytes in input_buffer.  */
-
-        size_t input_buffer_len;
-
-        /** Position we have reached reading data out of input_buffer.  */
-
-        size_t input_buffer_pos;
-
-        /** If true, the end of file has been reached. */
-
-        int eof;
-
-        /** Input source. */
-
-        JSONInputSource *source;
-
-        /** Callback function to read more data from the source. */
-
-        JSONInputReadFunc read_func;
+        JSONInputReader reader;
 
         /** Pointer to buffer to contain token contents. */
 
@@ -107,54 +84,6 @@ static int json_lexer_put_char(JSONLexer *lexer, char c)
         return 1;
 }
 
-/* Read a character from the input stream. */
-
-static int json_lexer_read_char(JSONLexer *lexer)
-{
-        int bytes;
-        int result;
-
-        /* End of file? */ 
-
-        if (lexer->eof) {
-                return -1;
-        }
-        /* Reached the end of the current block? Read the next one. */
-
-        if (lexer->input_buffer_pos >= lexer->input_buffer_len) {
-                bytes = lexer->read_func(lexer->source, lexer->input_buffer,
-                                         sizeof(lexer->input_buffer));
-
-                if (bytes == 0) {
-                        lexer->eof = 1;
-                }
-
-                if (bytes <= 0) {
-                        return -1;
-                } else {
-                        lexer->input_buffer_len = bytes;
-                        lexer->input_buffer_pos = 0;
-                }
-
-        }
-
-        /* Return the next character */
-
-        result = lexer->input_buffer[lexer->input_buffer_pos];
-        ++lexer->input_buffer_pos;
-
-        return result;
-}
-
-/* Undo reading the last character read by json_lexer_read_char. */
-
-void json_lexer_unread_char(JSONLexer *lexer)
-{
-        assert(lexer->input_buffer_pos > 0);
-        --lexer->input_buffer_pos;
-}
-
-
 /* Read through the input stream until we run out of whitespace.  Returns
  * non-zero for success, zero if an error occurred. */
 
@@ -185,7 +114,7 @@ static int json_lexer_skip_whitespace(JSONLexer *lexer)
 
 static JSONToken json_lexer_error_result(JSONLexer *lexer)
 {
-        if (lexer->eof) {
+        if (json_input_is_eof(&lexer->reader)) {
                 return JSON_TOKEN_EOF;
         } else {
                 return JSON_TOKEN_ERROR;
@@ -303,9 +232,7 @@ static JSONToken json_lexer_read_keyword(JSONLexer *lexer,
                 
                 c = json_lexer_read_char(lexer);
 
-                if (c < 0) {
-                        return json_lexer_error_result(lexer);
-                } else if (c != *p) {
+                if (c < 0 || c != *p) {
                         return JSON_TOKEN_ERROR;
                 }
                 
@@ -317,7 +244,7 @@ static JSONToken json_lexer_read_keyword(JSONLexer *lexer,
         return result;
 }
 
-JSONLexer *json_lexer_new(JSONInputSource *source,
+JSONLexer *json_lexer_new(JSONInputSource source,
                           JSONInputReadFunc read_func)
 {
         JSONLexer *lexer;
@@ -328,13 +255,10 @@ JSONLexer *json_lexer_new(JSONInputSource *source,
                 return NULL;
         }
 
-        lexer->source = source;
-        lexer->read_func = read_func;
-        lexer->input_buffer_len = 0;
-        lexer->input_buffer_pos = 0;
+        json_input_reader_init(&lexer->reader, source, read_func);
+
         lexer->token_buffer = NULL;
         lexer->token_buffer_allocated = 0;
-        lexer->eof = 0;
 
         return lexer;
 }

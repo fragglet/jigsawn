@@ -27,7 +27,7 @@ struct _JSONParser {
         JSONLexer *lexer;
 };
 
-JSONParser *json_parser_new(JSONInputSource *source, 
+JSONParser *json_parser_new(JSONInputSource source, 
                             JSONInputReadFunc read_func)
 {
         JSONParser *parser;

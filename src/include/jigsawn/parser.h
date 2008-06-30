@@ -47,7 +47,7 @@ typedef void *JSONInputSource;
  *                     negative, it indicates an error.
  */
 
-typedef int (*JSONInputReadFunc)(JSONInputSource *source, 
+typedef int (*JSONInputReadFunc)(JSONInputSource source, 
                                  unsigned char *data,
                                  size_t data_len);
 
@@ -67,7 +67,7 @@ typedef struct _JSONParser JSONParser;
  *                      possible to create a new parser.
  */
 
-JSONParser *json_parser_new(JSONInputSource *source,
+JSONParser *json_parser_new(JSONInputSource source,
                             JSONInputReadFunc read_func);
 
 /**
