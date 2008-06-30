@@ -32,6 +32,12 @@ extern "C" {
 typedef struct _JSONInputReader JSONInputReader;
 
 struct _JSONInputReader {
+
+        /**
+         * Input encoding format.
+         */
+
+        JSONInputEncoding encoding;
         
         /**
          * Input buffer. Data is read from the input stream into this 
@@ -68,11 +74,13 @@ struct _JSONInputReader {
  * @param reader           Pointer to the structure to initialise.
  * @param source           Handle for source to read data from.
  * @param read_func        Callback function to invoke to read more data.
+ * @return                 Non-zero if successfully initialised, zero
+ *                         for failure.
  */
 
-void json_input_reader_init(JSONInputReader *reader,
-                            JSONInputSource source,
-                            JSONInputReadFunc read_func);
+int json_input_reader_init(JSONInputReader *reader,
+                           JSONInputSource source,
+                           JSONInputReadFunc read_func);
 
 /**
  * Read a character from a @ref JSONInputReader.

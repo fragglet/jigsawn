@@ -255,7 +255,10 @@ JSONLexer *json_lexer_new(JSONInputSource source,
                 return NULL;
         }
 
-        json_input_reader_init(&lexer->reader, source, read_func);
+        if (!json_input_reader_init(&lexer->reader, source, read_func)) {
+                free(lexer);
+                return NULL;
+        }
 
         lexer->token_buffer = NULL;
         lexer->token_buffer_allocated = 0;

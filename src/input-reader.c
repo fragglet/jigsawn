@@ -23,35 +23,85 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "input-reader.h"
 
-/* Read a character from the input stream. */
+/* Templates for determining encoding type */
 
-int json_input_read_char(JSONInputReader *reader)
+static const int encoding_templates[NUM_JSON_ENCODINGS][4] = {
+        { 1, 1, 1, 1 },       /* JSON_ENCODING_UTF8 */
+        { 1, 0, 1, 0 },       /* JSON_ENCODING_16LE */
+        { 0, 1, 0, 1 },       /* JSON_ENCODING_16BE */
+        { 1, 0, 0, 0 },       /* JSON_ENCODING_32LE */
+        { 0, 0, 0, 1 },       /* JSON_ENCODING_32BE */
+};
+
+/* Character lengths for each of the encoding types */
+
+static const int encoding_lengths[] = {
+        1,                    /* JSON_ENCODING_UTF8, unused */
+        2,                    /* JSON_ENCODING_16LE */
+        2,                    /* JSON_ENCODING_16BE */
+        4,                    /* JSON_ENCODING_32LE */
+        4,                    /* JSON_ENCODING_32BE */
+};
+
+/* Fill the input buffer.  Returns zero for failure. */
+
+static int json_input_buffer_fill(JSONInputReader *reader)
 {
+        char *buffer;
         int bytes;
+        int remaining = sizeof(reader->input_buffer);
+         
+        /* Read as many bytes as possible until the buffer becomes 
+         * full or we reach the end of file */
+
+        buffer = reader->input_buffer;
+
+        while (remaining > 0) {
+                bytes = reader->read_func(reader->source, 
+                                          buffer,
+                                          remaining);
+
+                if (bytes == 0) {
+                        reader->eof = 1;
+                        break;
+                } else if (bytes < 0) {
+                        return 0;
+                }
+
+                buffer += bytes;
+                remaining -= bytes;
+        }
+
+        return 1;
+}
+
+/* Read a byte from the input stream.  Returns -1 for a error/end of file. */
+
+static int json_input_read_byte(JSONInputReader *reader)
+{
         int result;
+
+        /* Reached the end of the current block? Read the next one. */
+
+        if (reader->input_buffer_pos >= reader->input_buffer_len) {
+
+                /* End of file? */ 
+
+                if (reader->eof) {
+                        return -1;
+                }
+
+                if (!json_input_buffer_fill(reader)) {
+                        return -1;
+                }
+
+                reader->input_buffer_pos = 0;
+        }
 
         /* End of file? */ 
 
         if (reader->eof) {
                 return -1;
-        }
-        /* Reached the end of the current block? Read the next one. */
-
-        if (reader->input_buffer_pos >= reader->input_buffer_len) {
-                bytes = reader->read_func(reader->source, reader->input_buffer,
-                                         sizeof(reader->input_buffer));
-
-                if (bytes == 0) {
-                        reader->eof = 1;
-                }
-
-                if (bytes <= 0) {
-                        return -1;
-                } else {
-                        reader->input_buffer_len = bytes;
-                        reader->input_buffer_pos = 0;
-                }
-
         }
 
         /* Return the next character */
@@ -62,6 +112,64 @@ int json_input_read_char(JSONInputReader *reader)
         return result;
 }
 
+/* Read a UTF-8 encoded character */
+
+static int json_input_read_utf8(JSONInputReader *reader)
+{
+        return json_input_read_byte(reader);
+}
+
+/* Read a character */
+
+int json_input_read_char(JSONInputReader *reader)
+{
+        unsigned char charbuf[4];
+        int len;
+        int c;
+        int i;
+
+        /* UTF8 is a special case */
+
+        if (reader->encoding == JSON_ENCODING_UTF8) {
+                return json_input_read_utf8(reader);
+        }
+
+        /* Read bytes needed for the character */
+
+        len = encoding_lengths[i];
+
+        for (i=0; i<len; ++i) {
+                c = json_input_read_byte(reader);
+
+                if (c < 0) {
+                        return -1;
+                }
+
+                charbuf[i] = c;
+        }
+
+        /* Decode the character */
+
+        switch (reader->encoding) {
+                case JSON_ENCODING_16LE:
+                        return (charbuf[1] << 8) | charbuf[0];
+                case JSON_ENCODING_16BE:
+                        return (charbuf[0] << 8) | charbuf[1];
+                case JSON_ENCODING_32LE:
+                        return (charbuf[3] << 24)
+                             | (charbuf[2] << 16)
+                             | (charbuf[1] << 8)
+                             | charbuf[0];
+                case JSON_ENCODING_32BE:
+                        return (charbuf[0] << 24)
+                             | (charbuf[1] << 16)
+                             | (charbuf[2] << 8)
+                             | charbuf[3];
+                default:
+                        return -1;
+        }
+}
+
 /* Undo reading the last character read by json_input_read_char. */
 
 void json_input_unread_char(JSONInputReader *reader)
@@ -70,17 +178,74 @@ void json_input_unread_char(JSONInputReader *reader)
         --reader->input_buffer_pos;
 }
 
+/* Returns non-zero if end of file has been reached. */
+
+int json_input_is_eof(JSONInputReader *reader)
+{
+        return reader->eof
+            && reader->input_buffer_pos >= reader->input_buffer_len;
+}
+
+/* Check if a four byte sequence matches an encoding template */
+
+static int check_template(char *p, const int *template)
+{
+        int i;
+
+        for (i=0; i<4; ++i) {
+                if ((p[i] != 0) != template[i]) {
+                        return 0;
+                }
+        }
+
+        return 1;
+}
+
+/* Determine the encoding of the input data.  Returns zero for failure. */
+
+static int json_input_find_encoding(JSONInputReader *reader)
+{
+        int i, j;
+
+        if (!json_input_buffer_fill(reader)) {
+                return 0;
+        }
+
+        /* If less than four bytes, fall back to UTF8 as a default. */
+
+        if (reader->input_buffer_len < 4) {
+                reader->encoding = JSON_ENCODING_UTF8;
+                return 1;
+        }
+
+        /* Check the first four bytes against encoding templates */
+
+        for (i=0; i<NUM_JSON_ENCODINGS; ++i) {
+                if (check_template(reader->input_buffer, 
+                                   encoding_templates[i])) {
+                        reader->encoding = i;
+                        return 1;
+                }
+        }
+
+        /* Failed to find an encoding type that we recognise */
+
+        return 0;
+}
+
 /* Initialise JSONInputReader structure. */
 
-void json_input_reader_init(JSONInputReader *reader,
-                            JSONInputSource source,
-                            JSONInputReadFunc read_func)
+int json_input_reader_init(JSONInputReader *reader,
+                           JSONInputSource source,
+                           JSONInputReadFunc read_func)
 {
         reader->input_buffer_len = 0;
         reader->input_buffer_pos = 0;
         reader->eof = 0;
         reader->source = source;
         reader->read_func = read_func;
+
+        return json_input_find_encoding(reader);
 }
 
 

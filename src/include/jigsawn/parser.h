@@ -30,6 +30,19 @@ extern "C" {
 #include <stdlib.h>
 
 /**
+ * Unicode encoding for input data.
+ */
+
+typedef enum {
+        JSON_ENCODING_UTF8,
+        JSON_ENCODING_16LE,
+        JSON_ENCODING_16BE,
+        JSON_ENCODING_32LE,
+        JSON_ENCODING_32BE,
+        NUM_JSON_ENCODINGS
+} JSONInputEncoding;
+
+/**
  * A handle for a JSON input source.
  */
 
