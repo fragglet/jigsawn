@@ -55,11 +55,6 @@ struct _JSONInputReader {
 
         size_t input_buffer_pos;
 
-        /** Previous position before the last call to 
-         * @ref json_input_read_char. */
-
-        size_t last_input_buffer_pos;
-
         /** If true, the end of file has been reached. */
 
         int eof;
@@ -93,16 +88,6 @@ void json_input_reader_init(JSONInputReader *reader,
  */
 
 int json_input_read_char(JSONInputReader *reader);
-
-/**
- * Skip back one character, undoing reading the last character returned
- * from @ref json_input_read_char.  The character previously returned 
- * will be returned again at the next call.
- *
- * @param reader           The reader.
- */
-
-void json_input_unread_char(JSONInputReader *reader);
 
 /**
  * Query if an input stream has reached the end of file. 

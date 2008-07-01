@@ -119,32 +119,6 @@ static int json_lexer_put_char(JSONLexer *lexer, int c)
         return JSON_ERROR_SUCCESS;
 }
 
-/* Read through the input stream until we run out of whitespace.  Returns
- * zero for success, or negative error code. */
-
-static int json_lexer_skip_whitespace(JSONLexer *lexer)
-{
-        int c;
-        
-        /* Read characters until we find a non-whitespace character. */
-
-        do {
-                c = json_lexer_read_char(lexer);
-
-                if (c < 0) {
-                        /* Error */
-                        return c;
-                }
-        } while (isspace(c));
-
-        /* Skip back one character so we read the last (non-whitespace)
-         * character again. */
-
-        json_lexer_unread_char(lexer);
-
-        return JSON_ERROR_SUCCESS;
-}
-
 /* Returns EOF token if EOF was reached, otherwise generic error token. */
 
 static JSONToken json_lexer_error_result(JSONLexer *lexer)
@@ -362,23 +336,19 @@ void json_lexer_free(JSONLexer *lexer)
 JSONToken json_lexer_read_token(JSONLexer *lexer)
 {
         int c;
-        int err;
 
-        /* Skip any whitespace preceding the token */
+        /* Read from the input stream until we reach a non-whitespace
+         * character. */
 
-        err = json_lexer_skip_whitespace(lexer);
+        do {
+                /* Read the character beginning the token */
 
-        if (err < 0) {
-                return json_lexer_error_result(lexer);
-        }
+                c = json_lexer_read_char(lexer);
 
-        /* Read the character beginning the token */
-
-        c = json_lexer_read_char(lexer);
-
-        if (c < 0) {
-                return json_lexer_error_result(lexer);
-        }
+                if (c < 0) {
+                        return json_lexer_error_result(lexer);
+                }
+        } while (isspace(c));
 
         /* Default to empty buffer. */
 

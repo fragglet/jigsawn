@@ -233,12 +233,6 @@ int json_input_read_char(JSONInputReader *reader)
                 }
         }
 
-        /* Save our current position before we do the read, so that
-         * we can use json_input_unread_char to skip back to this
-         * position if desired. */
-
-        reader->last_input_buffer_pos = reader->input_buffer_pos;
-
         /* UTF-8 is a special case */
 
         if (reader->encoding == JSON_ENCODING_UTF8) {
@@ -281,13 +275,6 @@ int json_input_read_char(JSONInputReader *reader)
         }
 }
 
-/* Undo reading the last character read by json_input_read_char. */
-
-void json_input_unread_char(JSONInputReader *reader)
-{
-        reader->input_buffer_pos = reader->last_input_buffer_pos;
-}
-
 /* Returns non-zero if end of file has been reached. */
 
 int json_input_is_eof(JSONInputReader *reader)
@@ -305,7 +292,6 @@ void json_input_reader_init(JSONInputReader *reader,
         reader->encoding = JSON_ENCODING_UNKNOWN;
         reader->input_buffer_len = 0;
         reader->input_buffer_pos = 0;
-        reader->last_input_buffer_pos = 0;
         reader->eof = 0;
         reader->source = source;
         reader->read_func = read_func;
