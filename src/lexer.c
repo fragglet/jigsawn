@@ -31,7 +31,7 @@ struct _JSONLexer {
 
         /** Pointer to buffer to contain token contents. */
 
-        char *token_buffer;
+        unsigned char *token_buffer;
 
         /** Allocated size of token_buffer. */
 
@@ -64,9 +64,9 @@ static int json_lexer_enlarge_token_buffer(JSONLexer *lexer)
         return 1;
 }
 
-/* Add a character to token_buffer.  Returns zero for failure. */
+/* Add a byte to token_buffer.  Returns zero for failure. */
 
-static int json_lexer_put_char(JSONLexer *lexer, char c)
+static int json_lexer_put_byte(JSONLexer *lexer, unsigned char c)
 {
         /* Enlarge buffer if necessary */
 
@@ -80,6 +80,29 @@ static int json_lexer_put_char(JSONLexer *lexer, char c)
 
         lexer->token_buffer[lexer->token_buffer_len] = c;
         ++lexer->token_buffer_len;
+
+        return 1;
+}
+
+/* Add a character to token_buffer, performing encoding to UTF-8. */
+
+static int json_lexer_put_char(JSONLexer *lexer, int c)
+{
+        unsigned char buf[4];
+        int length;
+        int i;
+
+        /* Encode into the buffer */
+
+        json_utf8_encode(c, buf, &length);
+
+        /* Add each byte to the buffer. */
+
+        for (i=0; i<length; ++i) {
+                if (!json_lexer_put_byte(lexer, buf[i])) {
+                        return 0;
+                }
+        }
 
         return 1;
 }
@@ -126,7 +149,37 @@ static JSONToken json_lexer_error_result(JSONLexer *lexer)
 
 static int json_lexer_read_unicode(JSONLexer *lexer)
 {
-        return 1;
+        int i, j;
+        int value;
+        int c;
+
+        /* Read four character hex sequence */
+
+        value = 0;
+
+        for (i=0; i<4; ++i) {
+                c = json_input_read_char(&lexer->reader);
+
+                if (c < 0) {
+                        return 0;
+                }
+
+                /* Parse hexadecimal character */
+
+                j = hex_to_i(c);
+
+                if (j < 0) {
+                        return 0;
+                }
+
+                /* Add to sequence */
+
+                value = (value << 4) | j;
+        }
+
+        /* Add to string buffer */
+
+        return json_lexer_put_char(lexer, value);
 }
 
 /* Read an escape character/sequence.  This assumes that the preceding

@@ -85,3 +85,49 @@ int json_utf8_decode(unsigned char *buf, int length)
         return result;
 }
 
+void json_utf8_encode(int value, unsigned char *buf, size_t *length)
+{
+        int start, start_mask;
+        int v;
+        int i;
+        int l;
+
+        /* Work out how long the sequence must be */
+
+        if (value >= JSON_UTF8_THRESHOLD_4) {
+                start = JSON_UTF8_START_4;
+                start_mask = JSON_UTF8_MASK_4;
+                l = 4;
+        } else if (value >= JSON_UTF8_THRESHOLD_3) {
+                start = JSON_UTF8_START_3;
+                start_mask = JSON_UTF8_MASK_3;
+                l = 3;
+        } else if (value >= JSON_UTF8_THRESHOLD_2) {
+                start = JSON_UTF8_START_2;
+                start_mask = JSON_UTF8_MASK_2;
+                l = 2;
+        } else {
+                start = JSON_UTF8_START_1;
+                start_mask = JSON_UTF8_MASK_1;
+                l = 1;
+        }
+
+        /* Encode the bytes in the sequence backwards, starting from
+         * the last byte. */
+
+        v = value;
+
+        for (i = l - 1; i > 0; --i) {
+                buf[i] = v & ~JSON_UTF8_SEQ_MASK;
+                v >>= 6;
+        }
+        
+        /* Write the starting byte */
+
+        buf[0] = (v & ~start_mask) | start;
+
+        /* Save the sequence length */
+
+        *length = l;
+}
+
