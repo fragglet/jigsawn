@@ -58,6 +58,7 @@ static int json_input_buffer_fill(JSONInputReader *reader)
          * full or we reach the end of file */
 
         buffer = reader->input_buffer;
+        reader->input_buffer_len = 0;
 
         while (remaining > 0) {
                 bytes = reader->read_func(reader->source, 
@@ -73,6 +74,7 @@ static int json_input_buffer_fill(JSONInputReader *reader)
 
                 buffer += bytes;
                 remaining -= bytes;
+                reader->input_buffer_len += bytes;
         }
 
         return JSON_ERROR_SUCCESS;
