@@ -55,6 +55,11 @@ struct _JSONInputReader {
 
         size_t input_buffer_pos;
 
+        /** Previous position before the last call to 
+         * @ref json_input_read_char. */
+
+        size_t last_input_buffer_pos;
+
         /** If true, the end of file has been reached. */
 
         int eof;
