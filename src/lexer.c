@@ -336,7 +336,6 @@ JSONLexer *json_lexer_new(JSONInputSource source,
                           JSONInputReadFunc read_func)
 {
         JSONLexer *lexer;
-        int err;
 
         lexer = malloc(sizeof(JSONLexer));
 
@@ -344,12 +343,7 @@ JSONLexer *json_lexer_new(JSONInputSource source,
                 return NULL;
         }
 
-        err = json_input_reader_init(&lexer->reader, source, read_func);
-
-        if (err < 0) {
-                free(lexer);
-                return NULL;
-        }
+        json_input_reader_init(&lexer->reader, source, read_func);
 
         lexer->token_buffer = NULL;
         lexer->token_buffer_allocated = 0;
