@@ -22,6 +22,7 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <stdlib.h>
 
 #include "input-reader.h"
+#include "utf8.h"
 
 /* Templates for determining encoding type */
 
@@ -116,7 +117,40 @@ static int json_input_read_byte(JSONInputReader *reader)
 
 static int json_input_read_utf8(JSONInputReader *reader)
 {
-        return json_input_read_byte(reader);
+        unsigned char buf[4];
+        int seq_length;
+        int c;
+        int i;
+
+        /* Read the first byte */
+
+        c = json_input_read_byte(reader);
+
+        if (c < 0) {
+                return -1;
+        }
+
+        /* Determine the sequence length */
+
+        seq_length = json_utf8_seq_length(c);
+
+        /* Read extra bytes in the sequence. */
+
+        buf[0] = c;
+
+        for (i=1; i<seq_length; ++i) {
+                c = json_input_read_byte(reader);
+
+                if (c < 0) {
+                        return -1;
+                }
+
+                buf[i] = c;
+        }
+
+        /* Decode the character */
+
+        return json_utf8_decode(buf, seq_length);
 }
 
 /* Read a character */

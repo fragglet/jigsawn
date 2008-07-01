@@ -52,7 +52,7 @@ int json_utf8_seq_length(unsigned char start_byte)
 
 /* Decode a UTF-8 sequence */
 
-int json_utf8_decode(char *buf, int length) 
+int json_utf8_decode(unsigned char *buf, int length) 
 {
         int result;
         int start_mask;

@@ -52,6 +52,26 @@ extern "C" {
 #define JSON_UTF8_SEQ_BYTE 0x80
 #define JSON_UTF8_SEQ_MASK 0xc0
 
+/**
+ * Calculate the length of a UTF-8 sequence from its first byte.
+ *
+ * @param start_byte       The first byte in the sequence.
+ * @return                 Length of the sequence in bytes, or -1 if
+ *                         the sequence length could not be determined.
+ */
+
+int json_utf8_seq_length(unsigned char start_byte);
+
+/**
+ * Decode a UTF-8 sequence to a Unicode character.
+ *
+ * @param buf              Pointer to byte array containing data to be
+ *                         decoded.
+ * @param length           Length of the sequence, in bytes.
+ */
+
+int json_utf8_decode(unsigned char *buf, int length);
+
 #ifdef __cplusplus
 }
 #endif
