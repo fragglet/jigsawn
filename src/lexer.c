@@ -20,6 +20,9 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
 #include <stdlib.h>
+
+#include "jigsawn/error.h"
+
 #include "input-reader.h"
 #include "lexer.h"
 
@@ -42,7 +45,8 @@ struct _JSONLexer {
         size_t token_buffer_len;
 };
 
-/* Increase the size of token_buffer.  Returns zero for failure. */
+/* Increase the size of token_buffer.  Returns zero for success, or
+ * negative error code. */
 
 static int json_lexer_enlarge_token_buffer(JSONLexer *lexer)
 {
@@ -55,24 +59,28 @@ static int json_lexer_enlarge_token_buffer(JSONLexer *lexer)
         new_buffer = realloc(lexer->token_buffer, new_size);
 
         if (new_buffer == NULL) {
-                return 0;
+                return JSON_ERROR_OUT_OF_MEMORY;
         }
 
         lexer->token_buffer = new_buffer;
         lexer->token_buffer_allocated = new_size;
 
-        return 1;
+        return JSON_ERROR_SUCCESS;
 }
 
-/* Add a byte to token_buffer.  Returns zero for failure. */
+/* Add a byte to token_buffer.  Returns zero for success, or error code. */
 
 static int json_lexer_put_byte(JSONLexer *lexer, unsigned char c)
 {
+        int err;
+
         /* Enlarge buffer if necessary */
 
         if (lexer->token_buffer_len + 1 > lexer->token_buffer_allocated) {
-                if (!json_lexer_enlarge_token_buffer(lexer)) {
-                        return 0;
+                err = json_lexer_enlarge_token_buffer(lexer);
+
+                if (err < 0) {
+                        return err;
                 }
         }
 
@@ -81,15 +89,17 @@ static int json_lexer_put_byte(JSONLexer *lexer, unsigned char c)
         lexer->token_buffer[lexer->token_buffer_len] = c;
         ++lexer->token_buffer_len;
 
-        return 1;
+        return JSON_ERROR_SUCCESS;
 }
 
-/* Add a character to token_buffer, performing encoding to UTF-8. */
+/* Add a character to token_buffer, performing encoding to UTF-8. 
+ * Returns zero for success, or negative error code. */
 
 static int json_lexer_put_char(JSONLexer *lexer, int c)
 {
         unsigned char buf[4];
         int length;
+        int err;
         int i;
 
         /* Encode into the buffer */
@@ -99,16 +109,18 @@ static int json_lexer_put_char(JSONLexer *lexer, int c)
         /* Add each byte to the buffer. */
 
         for (i=0; i<length; ++i) {
-                if (!json_lexer_put_byte(lexer, buf[i])) {
-                        return 0;
+                err = json_lexer_put_byte(lexer, buf[i]);
+
+                if (err < 0) {
+                        return err;
                 }
         }
 
-        return 1;
+        return JSON_ERROR_SUCCESS;
 }
 
 /* Read through the input stream until we run out of whitespace.  Returns
- * non-zero for success, zero if an error occurred. */
+ * zero for success, or negative error code. */
 
 static int json_lexer_skip_whitespace(JSONLexer *lexer)
 {
@@ -121,7 +133,7 @@ static int json_lexer_skip_whitespace(JSONLexer *lexer)
 
                 if (c < 0) {
                         /* Error */
-                        return 0;
+                        return c;
                 }
         } while (isspace(c));
 
@@ -130,7 +142,7 @@ static int json_lexer_skip_whitespace(JSONLexer *lexer)
 
         json_lexer_unread_char(lexer);
 
-        return 1;
+        return JSON_ERROR_SUCCESS;
 }
 
 /* Returns EOF token if EOF was reached, otherwise generic error token. */
@@ -144,8 +156,25 @@ static JSONToken json_lexer_error_result(JSONLexer *lexer)
         }
 }
 
+/* Parse a hexadecimal character to a 0-15 value.  Returns negative
+ * error code if this is not a hexadecimal character */
+
+static int hex_to_i(int c)
+{
+        c = tolower(c);
+
+        if (c >= '0' && c <= '9') {
+                return c - '0';
+        } else if (c >= 'a' && c <= 'f') {
+                return 10 + c - 'a';
+        } else {
+                return JSON_ERROR_PARSE;
+        }
+}
+
 /* Read a unicode escape sequence.  This assumes that the preceding
- * '\u' has already been read.  Returns zero for failure. */
+ * '\u' has already been read.  Returns zero for success,
+ * or negative error code. */
 
 static int json_lexer_read_unicode(JSONLexer *lexer)
 {
@@ -161,7 +190,7 @@ static int json_lexer_read_unicode(JSONLexer *lexer)
                 c = json_input_read_char(&lexer->reader);
 
                 if (c < 0) {
-                        return 0;
+                        return c;
                 }
 
                 /* Parse hexadecimal character */
@@ -169,7 +198,7 @@ static int json_lexer_read_unicode(JSONLexer *lexer)
                 j = hex_to_i(c);
 
                 if (j < 0) {
-                        return 0;
+                        return j;
                 }
 
                 /* Add to sequence */
@@ -183,7 +212,8 @@ static int json_lexer_read_unicode(JSONLexer *lexer)
 }
 
 /* Read an escape character/sequence.  This assumes that the preceding
- * '\' has already been read.  Returns zero for failure. */
+ * '\' has already been read.  Returns zero for success, or negative
+ * error code. */
 
 static int json_lexer_read_escape_char(JSONLexer *lexer)
 {
@@ -194,7 +224,7 @@ static int json_lexer_read_escape_char(JSONLexer *lexer)
         c = json_lexer_read_char(lexer);
 
         if (c < 0) {
-                return 0;
+                return c;
         }
 
         switch (c) {
@@ -219,10 +249,10 @@ static int json_lexer_read_escape_char(JSONLexer *lexer)
                 default:
                         /* Invalid escape sequence */
 
-                        return 0;
+                        return JSON_ERROR_PARSE;
         }
 
-        return 1;
+        return JSON_ERROR_SUCCESS;
 }
 
 /* Read a string.  Returns JSON_TOKEN_STRING if successful, or an
@@ -231,6 +261,7 @@ static int json_lexer_read_escape_char(JSONLexer *lexer)
 static JSONToken json_lexer_read_string(JSONLexer *lexer)
 {
         int c;
+        int err;
 
         for (;;) {
 
@@ -248,13 +279,17 @@ static JSONToken json_lexer_read_string(JSONLexer *lexer)
                  * normal character. */
 
                 if (c == '\\') {
-                        if (!json_lexer_read_escape_char(lexer)) {
+                        err = json_lexer_read_escape_char(lexer);
+
+                        if (err < 0) {
                                 return JSON_TOKEN_ERROR;
                         }
                 } else if (c == '\"') {
                         break;
                 } else {
-                        if (!json_lexer_put_char(lexer, c)) {
+                        err = json_lexer_put_char(lexer, c);
+
+                        if (err < 0) {
                                 return JSON_TOKEN_ERROR;
                         }
                 }
@@ -301,6 +336,7 @@ JSONLexer *json_lexer_new(JSONInputSource source,
                           JSONInputReadFunc read_func)
 {
         JSONLexer *lexer;
+        int err;
 
         lexer = malloc(sizeof(JSONLexer));
 
@@ -308,7 +344,9 @@ JSONLexer *json_lexer_new(JSONInputSource source,
                 return NULL;
         }
 
-        if (!json_input_reader_init(&lexer->reader, source, read_func)) {
+        err = json_input_reader_init(&lexer->reader, source, read_func);
+
+        if (err < 0) {
                 free(lexer);
                 return NULL;
         }
@@ -330,10 +368,13 @@ void json_lexer_free(JSONLexer *lexer)
 JSONToken json_lexer_read_token(JSONLexer *lexer)
 {
         int c;
+        int err;
 
         /* Skip any whitespace preceding the token */
 
-        if (!json_lexer_skip_whitespace(lexer)) {
+        err = json_lexer_skip_whitespace(lexer);
+
+        if (err < 0) {
                 return json_lexer_error_result(lexer);
         }
 

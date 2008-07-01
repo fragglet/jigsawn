@@ -20,6 +20,8 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
  */
 
+#include "jigsawn/error.h"
+
 #include "utf8.h"
 
 /* Masks for the first byte, depending on sequence length.  Note
@@ -46,7 +48,7 @@ int json_utf8_seq_length(unsigned char start_byte)
         } else if ((start_byte & JSON_UTF8_MASK_4) == JSON_UTF8_START_4) {
                 return 4;
         } else {
-                return -1;
+                return JSON_ERROR_ENCODING;
         }
 }
 
@@ -74,7 +76,7 @@ int json_utf8_decode(unsigned char *buf, int length)
                 c = buf[i];
 
                 if ((c & JSON_UTF8_SEQ_MASK) != JSON_UTF8_SEQ_BYTE) {
-                        return -1;
+                        return JSON_ERROR_ENCODING;
                 }
 
                 /* Each sequence byte has another 6 bits of data. */

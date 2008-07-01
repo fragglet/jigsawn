@@ -74,8 +74,7 @@ struct _JSONInputReader {
  * @param reader           Pointer to the structure to initialise.
  * @param source           Handle for source to read data from.
  * @param read_func        Callback function to invoke to read more data.
- * @return                 Non-zero if successfully initialised, zero
- *                         for failure.
+ * @return                 Zero for success, or error value. 
  */
 
 int json_input_reader_init(JSONInputReader *reader,
@@ -86,8 +85,7 @@ int json_input_reader_init(JSONInputReader *reader,
  * Read a character from a @ref JSONInputReader.
  *
  * @param reader           The reader to read from.
- * @return                 Character value, or negative number if an error
- *                         occurred.
+ * @return                 Character value, or negative error value.
  */
 
 int json_input_read_char(JSONInputReader *reader);
