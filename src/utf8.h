@@ -20,8 +20,8 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
  */
 
-#ifndef JIGSAWN_UTF8_H
-#define JIGSAWN_UTF8_H
+#ifndef JIGSAWN_INTERNAL_UTF8_H
+#define JIGSAWN_INTERNAL_UTF8_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -96,5 +96,5 @@ void json_utf8_encode(int value, unsigned char *buf, size_t *length);
 }
 #endif
 
-#endif /* #ifndef JIGSAWN_UTF8_H */
+#endif /* #ifndef JIGSAWN_INTERNAL_UTF8_H */
 

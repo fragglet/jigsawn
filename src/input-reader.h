@@ -20,8 +20,8 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
  */
 
-#ifndef JIGSAWN_INPUT_READER_H
-#define JIGSAWN_INPUT_READER_H
+#ifndef JIGSAWN_INTERNAL_INPUT_READER_H
+#define JIGSAWN_INTERNAL_INPUT_READER_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -102,5 +102,5 @@ int json_input_is_eof(JSONInputReader *reader);
 }
 #endif
 
-#endif /* #ifndef JIGSAWN_INPUT_READER_H */
+#endif /* #ifndef JIGSAWN_INTERNAL_INPUT_READER_H */
 
