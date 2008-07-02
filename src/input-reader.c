@@ -251,7 +251,7 @@ int json_input_read_char(JSONInputReader *reader)
 
         /* Read bytes needed for the character */
 
-        len = encoding_lengths[i];
+        len = encoding_lengths[reader->encoding];
 
         for (i=0; i<len; ++i) {
                 c = json_input_read_byte(reader);
