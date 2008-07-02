@@ -45,7 +45,7 @@ struct _JSONInputReader {
          * the buffer is empty, it is refilled.
          */
         
-        char input_buffer[256];
+        unsigned char input_buffer[256];
 
         /** Number of bytes in input_buffer.  */
 

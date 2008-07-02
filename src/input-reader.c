@@ -46,6 +46,14 @@ static const int encoding_lengths[] = {
         4,                    /* JSON_ENCODING_32BE */
 };
 
+/* Returns non-zero if end of file has been reached. */
+
+int json_input_is_eof(JSONInputReader *reader)
+{
+        return reader->eof
+            && reader->input_buffer_pos >= reader->input_buffer_len;
+}
+
 /* Fill the input buffer.  Returns zero for success, or error code. */
 
 static int json_input_buffer_fill(JSONInputReader *reader)
@@ -161,7 +169,7 @@ static int json_input_read_byte(JSONInputReader *reader)
 
         /* End of file? */ 
 
-        if (reader->eof) {
+        if (json_input_is_eof(reader)) {
                 return JSON_ERROR_END_OF_FILE;
         }
 
@@ -275,14 +283,6 @@ int json_input_read_char(JSONInputReader *reader)
                 default:
                         return JSON_ERROR_ENCODING;
         }
-}
-
-/* Returns non-zero if end of file has been reached. */
-
-int json_input_is_eof(JSONInputReader *reader)
-{
-        return reader->eof
-            && reader->input_buffer_pos >= reader->input_buffer_len;
 }
 
 /* Initialise JSONInputReader structure. */

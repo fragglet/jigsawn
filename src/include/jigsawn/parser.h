@@ -34,12 +34,12 @@ extern "C" {
  */
 
 typedef enum {
-        JSON_ENCODING_UNKNOWN,          /* Unknown Unicode encoding */
         JSON_ENCODING_UTF8,             /* UTF-8 */
         JSON_ENCODING_16LE,             /* UTF-16, little endian encoding */
         JSON_ENCODING_16BE,             /* UTF-16, big endian encoding */
         JSON_ENCODING_32LE,             /* UTF-32, little endian encoding */
         JSON_ENCODING_32BE,             /* UTF-32, big endian encoding */
+        JSON_ENCODING_UNKNOWN,          /* Unknown Unicode encoding */
         NUM_JSON_ENCODINGS
 } JSONInputEncoding;
 
