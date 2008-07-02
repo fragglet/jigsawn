@@ -195,7 +195,7 @@ static int json_lexer_read_escape_char(JSONLexer *lexer)
 
         /* Find what type of escape sequence */
 
-        c = json_lexer_read_char(lexer);
+        c = json_input_read_char(&lexer->reader);
 
         if (c < 0) {
                 return c;
@@ -242,7 +242,7 @@ static JSONToken json_lexer_read_string(JSONLexer *lexer)
                 /* Read the next character.  If we reach the end of file,
                  * this is always an error. */
 
-                c = json_lexer_read_char(lexer);
+                c = json_input_read_char(&lexer->reader);
 
                 if (c < 0) {
                         return JSON_TOKEN_ERROR;
@@ -292,7 +292,7 @@ static JSONToken json_lexer_read_keyword(JSONLexer *lexer,
 
         while (*p != '\0') {
                 
-                c = json_lexer_read_char(lexer);
+                c = json_input_read_char(&lexer->reader);
 
                 if (c < 0 || c != *p) {
                         return JSON_TOKEN_ERROR;
@@ -343,7 +343,7 @@ JSONToken json_lexer_read_token(JSONLexer *lexer)
         do {
                 /* Read the character beginning the token */
 
-                c = json_lexer_read_char(lexer);
+                c = json_input_read_char(&lexer->reader);
 
                 if (c < 0) {
                         return json_lexer_error_result(lexer);
