@@ -78,7 +78,7 @@ int json_utf8_seq_length(unsigned char start_byte);
  * @param length           Length of the sequence, in bytes.
  */
 
-int json_utf8_decode(unsigned char *buf, int length);
+int json_utf8_decode(const unsigned char *buf, int length);
 
 /**
  * Encode a unicode character to a UTF-8 sequence.

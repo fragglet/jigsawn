@@ -1,4 +1,4 @@
 
 EXTRA_DIST=autotools
-SUBDIRS=src
+SUBDIRS=src test
 

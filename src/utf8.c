@@ -54,7 +54,7 @@ int json_utf8_seq_length(unsigned char start_byte)
 
 /* Decode a UTF-8 sequence */
 
-int json_utf8_decode(unsigned char *buf, int length) 
+int json_utf8_decode(const unsigned char *buf, int length) 
 {
         int result;
         int start_mask;
@@ -120,7 +120,7 @@ void json_utf8_encode(int value, unsigned char *buf, size_t *length)
         v = value;
 
         for (i = l - 1; i > 0; --i) {
-                buf[i] = v & ~JSON_UTF8_SEQ_MASK;
+                buf[i] = (v & ~JSON_UTF8_SEQ_MASK) | JSON_UTF8_SEQ_BYTE;
                 v >>= 6;
         }
         
