@@ -134,8 +134,8 @@ static int byte_stream_read(void *src, unsigned char *buf, size_t buf_len)
 /* Test output reading from a specified input stream matches the provided
  * output. */
 
-static void test_output(unsigned char *input, size_t input_len,
-                        int *output, int output_len)
+static void test_output(const unsigned char *input, size_t input_len,
+                        const int *output, int output_len)
 {
         ByteStream stream;
         JSONInputReader reader;
