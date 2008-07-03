@@ -1,3 +1,4 @@
+SUBDIRS=include
 
 AM_CFLAGS=-Wall
 
