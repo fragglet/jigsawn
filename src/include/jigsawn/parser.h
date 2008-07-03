@@ -17,7 +17,6 @@ LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
 NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN 
 CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 
-
  */
 
 #ifndef JIGSAWN_PARSER_H
@@ -28,6 +27,7 @@ extern "C" {
 #endif
 
 #include <stdlib.h>
+#include "value.h"
 
 /**
  * Unicode encoding for input data.
@@ -91,6 +91,16 @@ JSONParser *json_parser_new(JSONInputSource source,
  */
 
 void json_parser_free(JSONParser *parser);
+
+/**
+ * Get the root value of the JSON input stream.  This is always
+ * either an array or object.
+ *
+ * @param parser         The parser.
+ * @return               The root value, or NULL if an error occurred.
+ */
+
+JSONValue *json_parser_get_root(JSONParser *parser);
 
 #ifdef __cplusplus
 }
