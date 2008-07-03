@@ -98,6 +98,17 @@ int json_input_read_char(JSONInputReader *reader);
 
 int json_input_is_eof(JSONInputReader *reader);
 
+/**
+ * Get the detected Unicode encoding of the input stream.
+ *
+ * @param reader           The reader.
+ * @param encoding         Pointer to a variable to store the result.
+ * @return                 Zero if successful, or negative error code.
+ */
+
+int json_input_get_encoding(JSONInputReader *reader,
+                            JSONInputEncoding *encoding);
+
 #ifdef __cplusplus
 }
 #endif

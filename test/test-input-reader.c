@@ -45,9 +45,22 @@ static const int utf8_test_expected[] = {
         0x61, 0xa3, 0x2801, 0x10401
 };
 
+/* Multi-byte encodings (UTF-16, UTF-32) are supposed to have a BOM
+ * marker at the start of the file that can be used to determine 
+ * the encoding format.  However, not all Unicode files do have this
+ * marker.  Test for both scenarios ... */
+
 /* UTF-16 (little endian) */
 
 static const unsigned char utf16le_test_input[] = {
+        0x61, 0x00,
+        0xa3, 0x00,
+        0x01, 0x28,
+        0xaf, 0x7c
+};
+
+static const unsigned char utf16le_bom_test_input[] = {
+        0xff, 0xfe,
         0x61, 0x00,
         0xa3, 0x00,
         0x01, 0x28,
@@ -61,6 +74,14 @@ static const int utf16le_test_expected[] = {
 /* UTF-16 (big endian) */
 
 static const unsigned char utf16be_test_input[] = {
+        0x00, 0x61,
+        0x00, 0xa3,
+        0x28, 0x01,
+        0x7c, 0xaf
+};
+
+static const unsigned char utf16be_bom_test_input[] = {
+        0xfe, 0xff,
         0x00, 0x61,
         0x00, 0xa3,
         0x28, 0x01,
@@ -81,6 +102,15 @@ static const unsigned char utf32le_test_input[] = {
         0x89, 0xab, 0xcd, 0x0f
 };
 
+static const unsigned char utf32le_bom_test_input[] = {
+        0xff, 0xfe, 0x00, 0x00,
+        0x61, 0x00, 0x00, 0x00,
+        0xa3, 0x00, 0x00, 0x00,
+        0x01, 0x28, 0x00, 0x00,
+        0x01, 0x04, 0x01, 0x00,
+        0x89, 0xab, 0xcd, 0x0f
+};
+
 static const int utf32le_test_expected[] = {
         0x61, 0xa3, 0x2801, 0x10401, 0xfcdab89
 };
@@ -88,6 +118,15 @@ static const int utf32le_test_expected[] = {
 /* UTF-32 (big endian) */
 
 static const unsigned char utf32be_test_input[] = {
+        0x00, 0x00, 0x00, 0x61,
+        0x00, 0x00, 0x00, 0xa3, 
+        0x00, 0x00, 0x28, 0x01, 
+        0x00, 0x01, 0x04, 0x01,
+        0x0f, 0xcd, 0xab, 0x89 
+};
+
+static const unsigned char utf32be_bom_test_input[] = {
+        0x00, 0x00, 0xfe, 0xff,
         0x00, 0x00, 0x00, 0x61,
         0x00, 0x00, 0x00, 0xa3, 
         0x00, 0x00, 0x28, 0x01, 
@@ -135,15 +174,24 @@ static int byte_stream_read(void *src, unsigned char *buf, size_t buf_len)
  * output. */
 
 static void test_output(const unsigned char *input, size_t input_len,
-                        const int *output, int output_len)
+                        const int *output, int output_len,
+                        JSONInputEncoding expected_encoding)
 {
         ByteStream stream;
         JSONInputReader reader;
+        JSONInputEncoding encoding;
         int c;
         int i;
 
         byte_stream_init(&stream, input, input_len);
         json_input_reader_init(&reader, &stream, byte_stream_read);
+
+        /* Check the encoding */
+
+        assert(json_input_get_encoding(&reader, &encoding) == 0);
+        assert(encoding == expected_encoding);
+
+        /* Read each character from the input stream and verify */
 
         for (i=0; i<output_len; ++i) {
 
@@ -151,6 +199,7 @@ static void test_output(const unsigned char *input, size_t input_len,
 
                 c = json_input_read_char(&reader);
 
+                /*printf("%x = %x\n", c, output[i]); */
                 assert(c == output[i]);
         }
 
@@ -163,7 +212,8 @@ static void test_output(const unsigned char *input, size_t input_len,
 static void test_utf8(void)
 {
         test_output(utf8_test_input, ARRLEN(utf8_test_input),
-                    utf8_test_expected, ARRLEN(utf8_test_expected));
+                    utf8_test_expected, ARRLEN(utf8_test_expected),
+                    JSON_ENCODING_UTF8);
 }
 
 /* Test UTF-16 (little endian) input */
@@ -171,7 +221,11 @@ static void test_utf8(void)
 static void test_utf16le(void)
 {
         test_output(utf16le_test_input, ARRLEN(utf16le_test_input),
-                    utf16le_test_expected, ARRLEN(utf16le_test_expected));
+                    utf16le_test_expected, ARRLEN(utf16le_test_expected),
+                    JSON_ENCODING_16LE);
+        test_output(utf16le_bom_test_input, ARRLEN(utf16le_bom_test_input),
+                    utf16le_test_expected, ARRLEN(utf16le_test_expected),
+                    JSON_ENCODING_16LE);
 }
 
 /* Test UTF-16 (big endian) input */
@@ -179,7 +233,11 @@ static void test_utf16le(void)
 static void test_utf16be(void)
 {
         test_output(utf16be_test_input, ARRLEN(utf16be_test_input),
-                    utf16be_test_expected, ARRLEN(utf16be_test_expected));
+                    utf16be_test_expected, ARRLEN(utf16be_test_expected),
+                    JSON_ENCODING_16BE);
+        test_output(utf16be_bom_test_input, ARRLEN(utf16be_bom_test_input),
+                    utf16be_test_expected, ARRLEN(utf16be_test_expected),
+                    JSON_ENCODING_16BE);
 }
 
 /* Test UTF-32 (little endian) input */
@@ -187,7 +245,11 @@ static void test_utf16be(void)
 static void test_utf32le(void)
 {
         test_output(utf32le_test_input, ARRLEN(utf32le_test_input),
-                    utf32le_test_expected, ARRLEN(utf32le_test_expected));
+                    utf32le_test_expected, ARRLEN(utf32le_test_expected),
+                    JSON_ENCODING_32LE);
+        test_output(utf32le_bom_test_input, ARRLEN(utf32le_bom_test_input),
+                    utf32le_test_expected, ARRLEN(utf32le_test_expected),
+                    JSON_ENCODING_32LE);
 }
 
 /* Test UTF-32 (big endian) input */
@@ -195,7 +257,11 @@ static void test_utf32le(void)
 static void test_utf32be(void)
 {
         test_output(utf32be_test_input, ARRLEN(utf32be_test_input),
-                    utf32be_test_expected, ARRLEN(utf32be_test_expected));
+                    utf32be_test_expected, ARRLEN(utf32be_test_expected),
+                    JSON_ENCODING_32BE);
+        test_output(utf32be_bom_test_input, ARRLEN(utf32be_bom_test_input),
+                    utf32be_test_expected, ARRLEN(utf32be_test_expected),
+                    JSON_ENCODING_32BE);
 }
 
 int main(int argc, char *argv[])

@@ -26,6 +26,21 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "input-reader.h"
 #include "utf8.h"
 
+typedef struct {
+        unsigned char sequence[4];
+        int length;
+        JSONInputEncoding encoding;
+} BOMTemplate;
+
+/* Templates for matching BOM marker at start of Unicode streams */
+
+static const BOMTemplate bom_templates[] = {
+        { { 0x00, 0x00, 0xfe, 0xff }, 4, JSON_ENCODING_32BE },
+        { { 0xff, 0xfe, 0x00, 0x00 }, 4, JSON_ENCODING_32LE },
+        { { 0xfe, 0xff }, 2,             JSON_ENCODING_16BE },
+        { { 0xff, 0xfe }, 2,             JSON_ENCODING_16LE }
+};
+
 /* Templates for determining encoding type */
 
 static const int encoding_templates[NUM_JSON_ENCODINGS][4] = {
@@ -33,7 +48,7 @@ static const int encoding_templates[NUM_JSON_ENCODINGS][4] = {
         { 1, 0, 1, 0 },       /* JSON_ENCODING_16LE */
         { 0, 1, 0, 1 },       /* JSON_ENCODING_16BE */
         { 1, 0, 0, 0 },       /* JSON_ENCODING_32LE */
-        { 0, 0, 0, 1 },       /* JSON_ENCODING_32BE */
+        { 0, 0, 0, 1 }        /* JSON_ENCODING_32BE */
 };
 
 /* Character lengths for each of the encoding types */
@@ -43,7 +58,7 @@ static const int encoding_lengths[] = {
         2,                    /* JSON_ENCODING_16LE */
         2,                    /* JSON_ENCODING_16BE */
         4,                    /* JSON_ENCODING_32LE */
-        4,                    /* JSON_ENCODING_32BE */
+        4                     /* JSON_ENCODING_32BE */
 };
 
 /* Returns non-zero if end of file has been reached. */
@@ -88,6 +103,24 @@ static int json_input_buffer_fill(JSONInputReader *reader)
         return JSON_ERROR_SUCCESS;
 }
 
+/* Check if the initial bytes from the input stream match a BOM template 
+ * that can be used to deduce the endianness/encoding. */
+
+static int check_bom_template(unsigned char *p, const BOMTemplate *template)
+{
+        int i;
+
+        /* Check each byte in the sequence */
+
+        for (i=0; i<template->length; ++i) {
+                if (p[i] != template->sequence[i]) {
+                        return 0;
+                }
+        }
+
+        return 1;
+}
+
 /* Check if a four byte sequence matches an encoding template */
 
 static int check_template(char *p, const int *template)
@@ -124,7 +157,24 @@ static int json_input_find_encoding(JSONInputReader *reader)
                 return JSON_ERROR_SUCCESS;
         }
 
-        /* Check the first four bytes against encoding templates */
+        /* Check against BOM templates - UTF-16/32 are supposed to start
+         * with a marker (0xFEFF) that can be used to deduce endianness. */
+
+        for (i=0; i<sizeof(bom_templates) / sizeof(BOMTemplate); ++i) {
+
+                /* If we match a template, set the encoding and skip
+                 * past the BOM marker. */
+
+                if (check_bom_template(reader->input_buffer,
+                                       &bom_templates[i])) {
+                        reader->encoding = bom_templates[i].encoding;
+                        reader->input_buffer_pos = bom_templates[i].length;
+                        return JSON_ERROR_SUCCESS;
+                }
+        }
+
+        /* BOM not found.  Try to use the first four bytes' zero/non-zero
+         * values to work out the encoding, as described in the JSON RFC. */
 
         for (i=0; i<NUM_JSON_ENCODINGS; ++i) {
                 if (check_template(reader->input_buffer, 
@@ -134,8 +184,7 @@ static int json_input_find_encoding(JSONInputReader *reader)
                 }
         }
 
-        /* Failed to find an encoding type that we recognise.  Fall back
-         * to UTF-8.*/
+        /* Failed to find any encoding that we recognise. */
 
         return JSON_ERROR_UNKNOWN_ENCODING;
 }
@@ -220,6 +269,26 @@ static int json_input_read_utf8(JSONInputReader *reader)
         /* Decode the character */
 
         return json_utf8_decode(buf, seq_length);
+}
+
+/* Get the character encoding */
+
+int json_input_get_encoding(JSONInputReader *reader, 
+                            JSONInputEncoding *encoding)
+{
+        int err;
+
+        if (reader->encoding == JSON_ENCODING_UNKNOWN) {
+                err = json_input_find_encoding(reader);
+
+                if (err < 0) {
+                        return err;
+                }
+        }
+
+        *encoding = reader->encoding;
+
+        return JSON_ERROR_SUCCESS;
 }
 
 /* Read a character. */
