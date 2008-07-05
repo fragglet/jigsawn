@@ -53,6 +53,7 @@ typedef enum {
         JSON_TOKEN_COLON,                 /* : */
         JSON_TOKEN_EOF,                   /* End of file reached */
         JSON_TOKEN_ERROR,                 /* An error occurred */
+        JSON_TOKEN_START                  /* Start of file */
 } JSONToken;
 
 /**
@@ -74,6 +75,17 @@ JSONLexer *json_lexer_new(JSONInputSource source,
  */
 
 void json_lexer_free(JSONLexer *lexer);
+
+/**
+ * Get the type of the next token that will be returned from 
+ * @ref json_lexer_read_token.
+ *
+ * @param lexer             The lexer.
+ * @return                  Type of the token read, or @ref JSON_TOKEN_ERROR
+ *                          if an error occurred while reading.
+ */
+
+JSONToken json_lexer_peek_token(JSONLexer *lexer);
 
 /**
  * Read the next token from the input stream. 

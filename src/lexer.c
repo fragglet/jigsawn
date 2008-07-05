@@ -25,6 +25,7 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "input-reader.h"
 #include "lexer.h"
+#include "string-buffer.h"
 
 struct _JSONLexer {
         
@@ -32,98 +33,41 @@ struct _JSONLexer {
 
         JSONInputReader reader;
 
-        /** Pointer to buffer to contain token contents. */
+        /** 
+         * String buffers in which we store token contents.  We read
+         * one token ahead so that we can "peek" at the next token; 
+         * to do this, we need two separate string buffer.  We switch
+         * between which buffer we're using.
+         */
 
-        unsigned char *token_buffer;
+        JSONStringBuffer string_buffers[2];
 
-        /** Allocated size of token_buffer. */
+        /**
+         * Buffer used for the last token returned by
+         * @ref json_lexer_read_token.
+         */
 
-        size_t token_buffer_allocated;
+        int current_buffer;
 
-        /** Number of characters in token_buffer. */
+        /**
+         * The next token to be returned by
+         * @ref json_lexer_read_token.  We read one token ahead.
+         */
 
-        size_t token_buffer_len;
+        JSONToken next_token;
+
+        /** 
+         * Non-zero when we have read the first token.
+         */
+
+        int read_first;
 };
-
-/* Increase the size of token_buffer.  Returns zero for success, or
- * negative error code. */
-
-static int json_lexer_enlarge_token_buffer(JSONLexer *lexer)
-{
-        char *new_buffer;
-        size_t new_size;
-
-        /* Increase by 32 characters each time. */
-
-        new_size = lexer->token_buffer_allocated + 32;
-        new_buffer = realloc(lexer->token_buffer, new_size);
-
-        if (new_buffer == NULL) {
-                return JSON_ERROR_OUT_OF_MEMORY;
-        }
-
-        lexer->token_buffer = new_buffer;
-        lexer->token_buffer_allocated = new_size;
-
-        return JSON_ERROR_SUCCESS;
-}
-
-/* Add a byte to token_buffer.  Returns zero for success, or error code. */
-
-static int json_lexer_put_byte(JSONLexer *lexer, unsigned char c)
-{
-        int err;
-
-        /* Enlarge buffer if necessary */
-
-        if (lexer->token_buffer_len + 1 > lexer->token_buffer_allocated) {
-                err = json_lexer_enlarge_token_buffer(lexer);
-
-                if (err < 0) {
-                        return err;
-                }
-        }
-
-        /* Add the character */
-
-        lexer->token_buffer[lexer->token_buffer_len] = c;
-        ++lexer->token_buffer_len;
-
-        return JSON_ERROR_SUCCESS;
-}
-
-/* Add a character to token_buffer, performing encoding to UTF-8. 
- * Returns zero for success, or negative error code. */
-
-static int json_lexer_put_char(JSONLexer *lexer, int c)
-{
-        unsigned char buf[4];
-        int length;
-        int err;
-        int i;
-
-        /* Encode into the buffer */
-
-        json_utf8_encode(c, buf, &length);
-
-        /* Add each byte to the buffer. */
-
-        for (i=0; i<length; ++i) {
-                err = json_lexer_put_byte(lexer, buf[i]);
-
-                if (err < 0) {
-                        return err;
-                }
-        }
-
-        return JSON_ERROR_SUCCESS;
-}
 
 /* Returns EOF token if EOF was reached, otherwise generic error token. */
 
-static JSONToken json_lexer_error_result(JSONLexer *lexer)
+static JSONToken error_result(JSONInputReader *reader)
 {
-        if (json_input_is_eof(&lexer->reader)) {
+        if (json_input_is_eof(reader)) {
                 return JSON_TOKEN_EOF;
         } else {
                 return JSON_TOKEN_ERROR;
@@ -146,11 +90,13 @@ static int hex_to_i(int c)
         }
 }
 
-/* Read a unicode escape sequence.  This assumes that the preceding
+/* Read a unicode escape sequence from a string, saving the escaped
+ * character into the provided buffer.  This assumes that the preceding
  * '\u' has already been read.  Returns zero for success,
  * or negative error code. */
 
-static int json_lexer_read_unicode(JSONLexer *lexer)
+static int read_unicode_escape(JSONInputReader *reader,
+                               JSONStringBuffer *buffer)
 {
         int i, j;
         int value;
@@ -161,7 +107,7 @@ static int json_lexer_read_unicode(JSONLexer *lexer)
         value = 0;
 
         for (i=0; i<4; ++i) {
-                c = json_input_read_char(&lexer->reader);
+                c = json_input_read_char(reader);
 
                 if (c < 0) {
                         return c;
@@ -182,20 +128,21 @@ static int json_lexer_read_unicode(JSONLexer *lexer)
 
         /* Add to string buffer */
 
-        return json_lexer_put_char(lexer, value);
+        return json_string_buffer_put_char(buffer, value);
 }
 
-/* Read an escape character/sequence.  This assumes that the preceding
+/* Read an escape character/sequence, saving the escaped character
+ * into the provided buffer.  This assumes that the preceding
  * '\' has already been read.  Returns zero for success, or negative
  * error code. */
 
-static int json_lexer_read_escape_char(JSONLexer *lexer)
+static int read_escape_char(JSONInputReader *reader, JSONStringBuffer *buffer)
 {
         int c;
 
         /* Find what type of escape sequence */
 
-        c = json_input_read_char(&lexer->reader);
+        c = json_input_read_char(reader);
 
         if (c < 0) {
                 return c;
@@ -203,23 +150,23 @@ static int json_lexer_read_escape_char(JSONLexer *lexer)
 
         switch (c) {
                 case '\"':                 /* Quotes */
-                        return json_lexer_put_char(lexer, '\"');
+                        return json_string_buffer_put_char(buffer, '\"');
                 case '\\':                 /* Backslash */
-                        return json_lexer_put_char(lexer, '\\');
+                        return json_string_buffer_put_char(buffer, '\\');
                 case '/':                  /* Slash */
-                        return json_lexer_put_char(lexer, '/');
+                        return json_string_buffer_put_char(buffer, '/');
                 case 'b':                  /* Backspace */
-                        return json_lexer_put_char(lexer, '\b');
+                        return json_string_buffer_put_char(buffer, '\b');
                 case 'f':                  /* Form feed */
-                        return json_lexer_put_char(lexer, '\f');
+                        return json_string_buffer_put_char(buffer, '\f');
                 case 'n':                  /* New line */
-                        return json_lexer_put_char(lexer, '\n');
+                        return json_string_buffer_put_char(buffer, '\n');
                 case 'r':                  /* Carriage return */
-                        return json_lexer_put_char(lexer, '\r');
+                        return json_string_buffer_put_char(buffer, '\r');
                 case 't':                  /* Tab */
-                        return json_lexer_put_char(lexer, '\t');
+                        return json_string_buffer_put_char(buffer, '\t');
                 case 'u':
-                        return json_lexer_read_unicode(lexer);
+                        return read_unicode_escape(reader, buffer);
                 default:
                         /* Invalid escape sequence */
 
@@ -229,10 +176,12 @@ static int json_lexer_read_escape_char(JSONLexer *lexer)
         return JSON_ERROR_SUCCESS;
 }
 
-/* Read a string.  Returns JSON_TOKEN_STRING if successful, or an
+/* Read a string, saving the string contents into the provided
+ * buffer.  Returns JSON_TOKEN_STRING if successful, or an
  * error token.  Assumes the opening " has already been read. */
 
-static JSONToken json_lexer_read_string(JSONLexer *lexer)
+static JSONToken read_string(JSONInputReader *reader,
+                             JSONStringBuffer *buffer)
 {
         int c;
         int err;
@@ -242,7 +191,7 @@ static JSONToken json_lexer_read_string(JSONLexer *lexer)
                 /* Read the next character.  If we reach the end of file,
                  * this is always an error. */
 
-                c = json_input_read_char(&lexer->reader);
+                c = json_input_read_char(reader);
 
                 if (c < 0) {
                         return JSON_TOKEN_ERROR;
@@ -253,7 +202,7 @@ static JSONToken json_lexer_read_string(JSONLexer *lexer)
                  * normal character. */
 
                 if (c == '\\') {
-                        err = json_lexer_read_escape_char(lexer);
+                        err = read_escape_char(reader, buffer);
 
                         if (err < 0) {
                                 return JSON_TOKEN_ERROR;
@@ -261,13 +210,17 @@ static JSONToken json_lexer_read_string(JSONLexer *lexer)
                 } else if (c == '\"') {
                         break;
                 } else {
-                        err = json_lexer_put_char(lexer, c);
+                        err = json_string_buffer_put_char(buffer, c);
 
                         if (err < 0) {
                                 return JSON_TOKEN_ERROR;
                         }
                 }
         }
+
+        /* Terminate the string */
+
+        json_string_buffer_put_char(buffer, '\0');
 
         return JSON_TOKEN_STRING;
 }
@@ -276,9 +229,9 @@ static JSONToken json_lexer_read_string(JSONLexer *lexer)
  * or JSON_TOKEN_ERROR for failure.  Assumes the first character 
  * has already been read. */
 
-static JSONToken json_lexer_read_keyword(JSONLexer *lexer,
-                                         const char *keyword,
-                                         JSONToken result)
+static JSONToken read_keyword(JSONInputReader *reader,
+                              const char *keyword,
+                              JSONToken result)
 {
         const char *p;
         int c;
@@ -292,7 +245,7 @@ static JSONToken json_lexer_read_keyword(JSONLexer *lexer,
 
         while (*p != '\0') {
                 
-                c = json_input_read_char(&lexer->reader);
+                c = json_input_read_char(reader);
 
                 if (c < 0 || c != *p) {
                         return JSON_TOKEN_ERROR;
@@ -304,6 +257,65 @@ static JSONToken json_lexer_read_keyword(JSONLexer *lexer,
         /* Read successfully. */
 
         return result;
+}
+
+/**
+ * Internal function to read the next token.  The specified
+ * buffer is used to store the token contents.
+ *
+ * @param lexer            The lexer to read from.
+ * @param buffer           @ref JSONStringBuffer to store the token contents.
+ * @return                 Token, or @ref JSON_TOKEN_ERROR.
+ */
+
+static JSONToken internal_read_token(JSONInputReader *reader,
+                                     JSONStringBuffer *buffer)
+{
+        int c;
+
+        /* Read from the input stream until we reach a non-whitespace
+         * character. */
+
+        do {
+                /* Read the character beginning the token */
+
+                c = json_input_read_char(reader);
+
+                if (c < 0) {
+                        return error_result(reader);
+                }
+        } while (isspace(c));
+
+        /* Start with an empty buffer. */
+
+        json_string_buffer_reset(buffer);
+
+        /* Try to determine the token type. */
+
+        switch (c) {
+                case '[':
+                        return JSON_TOKEN_BEGIN_ARRAY;
+                case ']':
+                        return JSON_TOKEN_END_ARRAY;
+                case '{':
+                        return JSON_TOKEN_BEGIN_OBJECT;
+                case '}':
+                        return JSON_TOKEN_BEGIN_OBJECT;
+                case '"':
+                        return read_string(reader, buffer);
+                case 't':
+                        return read_keyword(reader, "true", JSON_TOKEN_TRUE);
+                case 'f':
+                        return read_keyword(reader, "false", JSON_TOKEN_FALSE);
+                case 'n':
+                        return read_keyword(reader, "null", JSON_TOKEN_NULL);
+                case ':':
+                        return JSON_TOKEN_COLON;
+                case ',':
+                        return JSON_TOKEN_COMMA;
+        }
+
+        return JSON_TOKEN_ERROR;
 }
 
 JSONLexer *json_lexer_new(JSONInputSource source,
@@ -318,85 +330,91 @@ JSONLexer *json_lexer_new(JSONInputSource source,
         }
 
         json_input_reader_init(&lexer->reader, source, read_func);
+        json_string_buffer_init(&lexer->string_buffers[0]);
+        json_string_buffer_init(&lexer->string_buffers[1]);
 
-        lexer->token_buffer = NULL;
-        lexer->token_buffer_allocated = 0;
+        lexer->current_buffer = 0;
+        lexer->read_first = 0;
 
         return lexer;
 }
 
 void json_lexer_free(JSONLexer *lexer)
 {
-        free(lexer->token_buffer);
+        json_string_buffer_free(&lexer->string_buffers[0]);
+        json_string_buffer_free(&lexer->string_buffers[1]);
         free(lexer);
+}
+
+/* Check that we have read the first token, and read it if necessary. */
+
+static void json_lexer_check_first(JSONLexer *lexer)
+{
+        /* Have we read the first token yet?  If not, we need to. */
+
+        if (!lexer->read_first) {
+                lexer->next_token
+                        = internal_read_token(&lexer->reader,
+                                              &lexer->string_buffers[0]);
+                lexer->read_first = 1;
+        }
+}
+
+/* Peek at the next token, but leaving it waiting in the queue to be
+ * returned by @ref json_lexer_read_token. */
+
+JSONToken json_lexer_peek_token(JSONLexer *lexer)
+{
+        /* Check we have read the first token */
+
+        json_lexer_check_first(lexer);
+
+        return lexer->next_token;
 }
 
 /* Read a token. */
 
 JSONToken json_lexer_read_token(JSONLexer *lexer)
 {
-        int c;
+        JSONToken result;
+        JSONStringBuffer *next_buffer;
+        int new_current_buffer;
 
-        /* Read from the input stream until we reach a non-whitespace
-         * character. */
+        /* Check we have read the first token */
 
-        do {
-                /* Read the character beginning the token */
+        json_lexer_check_first(lexer);
 
-                c = json_input_read_char(&lexer->reader);
+        /* Once we reach an error, stop. */
 
-                if (c < 0) {
-                        return json_lexer_error_result(lexer);
-                }
-        } while (isspace(c));
-
-        /* Default to empty buffer. */
-
-        lexer->token_buffer_len = 0;
-
-        /* Try to determine the token type */
-
-        switch (c) {
-                case '[':
-                        return JSON_TOKEN_BEGIN_ARRAY;
-                case ']':
-                        return JSON_TOKEN_END_ARRAY;
-                case '{':
-                        return JSON_TOKEN_BEGIN_OBJECT;
-                case '}':
-                        return JSON_TOKEN_BEGIN_OBJECT;
-                case '"':
-                        return json_lexer_read_string(lexer);
-                case 't':
-                        return json_lexer_read_keyword(lexer,
-                                                       "true",
-                                                       JSON_TOKEN_TRUE);
-                case 'f':
-                        return json_lexer_read_keyword(lexer,
-                                                       "false",
-                                                       JSON_TOKEN_FALSE);
-                case 'n':
-                        return json_lexer_read_keyword(lexer,
-                                                       "null",
-                                                       JSON_TOKEN_NULL);
-                case ':':
-                        return JSON_TOKEN_COLON;
-                case ',':
-                        return JSON_TOKEN_COMMA;
+        if (lexer->next_token == JSON_TOKEN_ERROR) {
+                return JSON_TOKEN_ERROR;
         }
 
-        return JSON_TOKEN_ERROR;
+        /* The next token is waiting in the next_token field, and is
+         * using the opposite buffer to the current one. */
+
+        result = lexer->next_token;
+        new_current_buffer = 1 - lexer->current_buffer;
+
+        /* Retrieve the next token, overwriting the last token and its
+         * buffer. */
+
+        next_buffer = &lexer->string_buffers[lexer->current_buffer];
+        lexer->next_token = internal_read_token(&lexer->reader, next_buffer);
+
+        /* Update current_buffer and return the token */
+
+        lexer->current_buffer = new_current_buffer;
+
+        return result;
 }
 
 const char *json_lexer_get_buffer(JSONLexer *lexer)
 {
-        /* If the last token read had a specific value (string or number
-         * value), return the token buffer.  Otherwise, return NULL. */
+        JSONStringBuffer *current_buffer;
 
-        if (lexer->token_buffer_len > 0) {
-                return lexer->token_buffer;
-        } else {
-                return NULL;
-        }
+        current_buffer = &lexer->string_buffers[lexer->current_buffer];
+
+        return json_string_buffer_get(current_buffer);
 }
 
