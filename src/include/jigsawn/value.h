@@ -60,9 +60,9 @@ JSONValueType json_value_get_type(JSONValue *value);
  * Query whether more values can be read from an array or object.
  *
  * @param value              The array or object.
- * @return                   Non-zero if the end of the array or object
- *                           has been reached, or zero if the end has 
- *                           been reached.
+ * @return                   Zero if the end of the array or object
+ *                           has been reached, or non-zero if the end has 
+ *                           not been reached.
  */
 
 int json_value_has_more(JSONValue *value);
