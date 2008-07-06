@@ -23,7 +23,12 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 static void json_float_init(JSONValue *value, const char *data)
 {
-        value->data.boolval = atof(data);
+        value->data.floatval = atof(data);
+}
+
+double json_float_get_value(JSONValue *value)
+{
+        return value->data.floatval;
 }
 
 /* Value class for JSON_VALUE_FLOAT. */

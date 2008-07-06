@@ -26,6 +26,11 @@ static void json_boolean_init(JSONValue *value, const char *data)
         value->data.boolval = data[0] == '1';
 }
 
+int json_boolean_get_value(JSONValue *value)
+{
+        return value->data.boolval;
+}
+
 /* Value class for JSON_VALUE_BOOLEAN. */
 
 JSONValueClass json_class_boolean = {

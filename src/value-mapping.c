@@ -27,6 +27,18 @@ static void json_mapping_init(JSONValue *value, const char *data)
         value->data.mapping.key = strdup(data);
 }
 
+const char *json_mapping_get_key(JSONValue *value)
+{
+        return value->data.mapping.key;
+}
+
+JSONValue *json_mapping_get_value(JSONValue *value)
+{
+        /* TODO */
+
+        return NULL;
+}
+
 /* Value class for JSON_VALUE_MAPPING. */
 
 JSONValueClass json_class_mapping = {

@@ -26,6 +26,11 @@ static void json_int_init(JSONValue *value, const char *data)
         value->data.intval = atoi(data);
 }
 
+int json_int_get_value(JSONValue *value)
+{
+        return value->data.intval;
+}
+
 /* Value class for JSON_VALUE_INT. */
 
 JSONValueClass json_class_int = {

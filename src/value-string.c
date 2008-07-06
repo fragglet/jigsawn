@@ -26,6 +26,11 @@ void json_string_init(JSONValue *value, const char *data)
         value->data.strval = data;
 }
 
+const char *json_string_get_value(JSONValue *value)
+{
+        return value->data.strval;
+}
+
 /* Value class for JSON_VALUE_STRING. */
 
 JSONValueClass json_class_string = {
